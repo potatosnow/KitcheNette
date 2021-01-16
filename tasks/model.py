@@ -85,8 +85,11 @@ class Model(nn.Module):
                                     lr=learning_rate, weight_decay=weight_decay)
 
         # Loss Functions
-        mse_crit = nn.MSELoss().cuda()
-        cosine_crit = nn.CosineEmbeddingLoss(0.1).cuda()
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        mse_crit = nn.MSELoss().to(device)
+        cosine_crit = nn.CosineEmbeddingLoss(0.1).to(device)
+        # mse_crit = nn.MSELoss().cuda()
+        # cosine_crit = nn.CosineEmbeddingLoss(0.1).cuda()
         self.criterion = [mse_crit, cosine_crit]
 
     def forward(self, d1_r, d1_c, d1_l, d2_r, d2_c, d2_l):
@@ -189,7 +192,7 @@ class Model(nn.Module):
 
     def load_checkpoint(self, checkpoint_dir, filename):
         filename = checkpoint_dir + filename
-        checkpoint = torch.load(filename)
+        checkpoint = torch.load(filename, map_location=torch.device('cpu'))
 
         self.load_state_dict(checkpoint['state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])

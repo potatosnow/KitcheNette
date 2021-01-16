@@ -214,6 +214,7 @@ def get_model(args, dataset):
     dataset.set_rep(args.rep_idx)
     print("Current Representaion Index:", dataset.get_rep)
     print("Current Input Embedding Dimension:", dataset.input_dim)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = Model(input_dim=dataset.input_dim,
                       category_emb=args.category_emb,
                       category_dim=args.category_dim,
@@ -223,7 +224,7 @@ def get_model(args, dataset):
                       linear_dropout=args.linear_dr,
                       dist_fn=args.dist_fn,
                       learning_rate=args.learning_rate,
-                      weight_decay=args.weight_decay).cuda()
+                      weight_decay=args.weight_decay).to(device)
     return model
 
 def init_logging(args):
@@ -253,7 +254,7 @@ def init_seed(seed=None):
     torch.manual_seed(seed)
     random.seed(seed)
 
-def main():
+def main_train():
     # Initialize logging and prepare seed
     init_logging(args)
     LOGGER.info('COMMAND: {}'.format(' '.join(sys.argv)))
@@ -280,5 +281,39 @@ def main():
         et = int((datetime.now() - start_time).total_seconds())
         LOGGER.info('TOTAL Elapsed Time: {:2d}:{:2d}:{:2d}'.format(et//3600, et%3600//60, et%60))
 
+def main_extract_ingredients():
+    pairing_scores_file = './data/kitchenette_pairing_scores.csv'
+    ingrs = []
+    with open(pairing_scores_file) as f:
+        line = f.readline()
+        while line:
+            parts = line.split(',')
+            line = f.readline()
+            if parts[0] == 'ingr1':
+                continue
+            if parts[0] not in ingrs:
+                ingrs.append(parts[0])
+            if parts[1] not in ingrs:
+                ingrs.append(parts[1])
+    with open('./data/kitchenette_ingredients', 'w') as f:
+        f.write(','.join(ingrs))
+
+def main_ingredients_table():
+    with open('./data/kitchenette_ingredients') as f:
+        line = f.readline()
+        ingrs = line.split(',')
+
+    # Get datset, run function, model
+    dataset = get_dataset(args.data_path)
+
+    # Get model
+    model = get_model(args, dataset)
+
+    model.load_checkpoint(args.checkpoint_dir, args.model_name)
+    save_prediction_from_all_ingrs_pair(model, ingrs, dataset, args)
+
+
 if __name__ == '__main__':
-    main()
+    # main_train()
+    # main_extract_ingredients()
+    main_ingredients_table()

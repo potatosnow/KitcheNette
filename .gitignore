@@ -115,3 +115,32 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# my ignore
+.idea
+newpush
+pushgit
+force_pushgit
+push_newbranch
+pushgit
+bak_pushgit
+new_branch
+.gitignore
+.*
+_.*
+.idea/
+dependency-reduced-pom.xml
+stem-recall-cradle.iml
+target/
+log/
+sampleInput*
+tt/
+vim.exe.stackdump
+derby.log
+metastore_db/
+venv/
+*.pyc
+tt*.py
+task_chain/
+__pycache__/
+fetch_branch.sh

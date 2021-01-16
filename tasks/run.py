@@ -27,6 +27,9 @@ from utils import *
 
 LOGGER = logging.getLogger(__name__)
 
+def get_device():
+    return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 def element(d):
     return [d[k] for k in range(0,len(d))]
 
@@ -47,10 +50,10 @@ def run_reg(model, loader, dataset, args, train=False):
         else: model.eval()
 
         # Get outputs from Model forward()
-        outputs = model(d1_r.cuda(), d1_c.cuda(), d1_l, d2_r.cuda(), d2_c.cuda(), d2_l)
+        outputs = model(d1_r.to(get_device()), d1_c.to(get_device()), d1_l, d2_r.to(get_device()), d2_c.to(get_device()), d2_l)
 
         # Get loss
-        loss = model.get_loss(outputs, score.cuda())
+        loss = model.get_loss(outputs, score.to(get_device()))
 
         #
         stats['loss'] += [loss.data.item()]
@@ -197,7 +200,7 @@ def save_embed(model, dataset, args, file):
             d1_k = rep[1]
             d1_l = len(d1_r)
 
-        d1_r = Variable(torch.FloatTensor(d1_r)).cuda()
+        d1_r = Variable(torch.FloatTensor(d1_r)).to(get_device())
         d1_l = torch.LongTensor(np.array([d1_l]))
         d1_r = d1_r.unsqueeze(0)
         d1_l = d1_l.unsqueeze(0)
@@ -238,7 +241,7 @@ def save_prediction(model, loader, dataset, args):
 
     for d_idx, (d1, d1_r, d1_c, d1_l, d2, d2_r, d2_c, d2_l, score) in enumerate(loader):
         # Run model for getting predictions
-        outputs = model(d1_r.cuda(), d1_c.cuda(), d1_l, d2_r.cuda(), d2_c.cuda(), d2_l)
+        outputs = model(d1_r.to(get_device()), d1_c.to(get_device()), d1_l, d2_r.to(get_device()), d2_c.to(get_device()), d2_l)
         predictions = outputs[2].data.cpu().numpy()
         targets = score.data.tolist()
 
@@ -305,8 +308,8 @@ def save_prediction_unknowns(model, loader, dataset, args):
 
         if len(batch) == 256:
             inputs = dataset.collate_fn(batch)
-            outputs = model(inputs[1].cuda(), inputs[2].cuda(), inputs[3],
-                                    inputs[5].cuda(), inputs[6].cuda(), inputs[7])
+            outputs = model(inputs[1].to(get_device()), inputs[2].to(get_device()), inputs[3],
+                            inputs[5].to(get_device()), inputs[6].to(get_device()), inputs[7])
             predictions = outputs[2].data.cpu().numpy()
 
             for example, pred in zip(batch, predictions):
@@ -322,8 +325,64 @@ def save_prediction_unknowns(model, loader, dataset, args):
 
     if len(batch) > 0:
         inputs = dataset.collate_fn(batch)
-        outputs, _, _ = model(inputs[1].cuda(), inputs[2].cuda(), inputs[3],
-                                inputs[5].cuda(), inputs[6].cuda(), inputs[7])
+        # outputs, _, _ = model(inputs[1].to(get_device()), inputs[2].to(get_device()), inputs[3],
+        outputs = model(inputs[1].to(get_device()), inputs[2].to(get_device()), inputs[3],
+                        inputs[5].to(get_device()), inputs[6].to(get_device()), inputs[7])
+        predictions = outputs[2].data.cpu().numpy()
+
+        for example, pred in zip(batch, predictions):
+            csv_writer.writerow([example[0], example[4], pred])
+
+def save_prediction_from_all_ingrs_pair(model, ingrs_list, dataset, args):
+    model.eval()
+
+    LOGGER.info('processing {}..'.format(args.unknown_path))
+    embeddings = pickle.load(open(args.embed_path, 'rb'))
+
+
+    csv_writer = csv.writer(open(args.checkpoint_dir + 'prediction_ingrs_pairs_' +
+                                 args.model_name + '.csv', 'w'))
+    csv_writer.writerow(['ingr1', 'ingr2', 'prediction'])
+
+    total_len = len(ingrs_list) * len(ingrs_list)
+    row_idx = 0
+    batch = []
+    for ingr1 in ingrs_list:
+        for ingr2 in ingrs_list:
+            row_idx += 1
+            ingr1_r = embeddings[ingr1]
+            ingr2_r = embeddings[ingr2]
+
+            #ignore this categorical features
+            ingr1_c = embeddings[ingr1]
+            ingr2_c = embeddings[ingr2]
+
+            example = [ingr1, ingr1_r, ingr1_c, len(ingr1_r),
+                       ingr2, ingr2_r, ingr2_c, len(ingr2_r), 0]
+            batch.append(example)
+
+            if len(batch) == 256:
+                inputs = dataset.collate_fn(batch)
+                outputs = model(inputs[1].to(get_device()), inputs[2].to(get_device()), inputs[3],
+                                        inputs[5].to(get_device()), inputs[6].to(get_device()), inputs[7])
+                predictions = outputs[2].data.cpu().numpy()
+
+                for example, pred in zip(batch, predictions):
+                    csv_writer.writerow([example[0], example[4], pred])
+
+                batch = []
+
+            # Print progress
+            if row_idx % 5000 == 0 or row_idx == total_len - 1:
+                _progress = '{}/{} saving unknwon predictions..'.format(
+                    row_idx + 1, total_len)
+                LOGGER.info(_progress)
+
+    if len(batch) > 0:
+        inputs = dataset.collate_fn(batch)
+        # outputs, _, _ = model(inputs[1].to(get_device()), inputs[2].to(get_device()), inputs[3],
+        outputs = model(inputs[1].to(get_device()), inputs[2].to(get_device()), inputs[3],
+                                inputs[5].to(get_device()), inputs[6].to(get_device()), inputs[7])
         predictions = outputs[2].data.cpu().numpy()
 
         for example, pred in zip(batch, predictions):
